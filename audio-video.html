@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OptiHub3 - Audio to Video</title>
+   
+     <script src="https://cdnjs.cloudflare.com/ajax/libs/coi-serviceworker/0.1.7/coi-serviceworker.min.js"></script>
+    <link rel="icon" href="data:,">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div id="app-header"></div>
+    <main>
+        <!-- HERO SECTION -->
+        <section class="hero">
+            <div class="container text-center">
+                <h2>Audio to Video</h2>
+                <p>Sync voiceover audio with your videos.</p>
+
+                <div class="flow-cards">
+                    <!-- Upload Audio Card -->
+                    <div class="flow-card">
+                        <div class="flow-card-header">
+                            <div class="flow-card-icon">🎵</div>
+                            <h3>Upload Audio</h3>
+                        </div>
+                        <div class="flow-card-body">
+                            <div id="audio-file-info" class="file-info">No audio selected</div><br><br>
+                            <button id="change-audio-btn" class="btn btn-primary">Choose Audio</button>
+                        </div>
+                    </div>
+
+                    <!-- Upload Video Card -->
+                    <div class="flow-card">
+                        <div class="flow-card-header">
+                            <div class="flow-card-icon">🎬</div>
+                            <h3>Upload Video</h3>
+                        </div>
+                        <div class="flow-card-body">
+                            <div id="video-file-info" class="file-info">No video selected</div><br><br>
+                            <button id="change-video-btn" class="btn btn-primary">Choose Video</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PREVIEW & EDIT SECTION -->
+        <section class="section">
+            <div class="container">
+                <h3 class="section-heading">Preview & Edit</h3>
+
+                <!-- Layout box container where video player will be injected -->
+                <div id="preview-box" class="preview-box">
+                    <img id="preview-placeholder-img" src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1200&auto=format&fit=crop" alt="Beach Preview">
+                    <div id="preview-overlay-controls" class="preview-overlay">
+                        <p class="preview-text">Let's add your voiceover to this video clip!</p>
+                        <div class="audio-player">
+                            <button class="play-btn">▶</button>
+                            <span class="time">0:02</span>
+                            <div class="waveform"></div>
+                            <span class="time">01:10</span>
+                        </div>
+                    </div>
+                </div>
+                <br><br>
+                <div class="text-center">
+                    <button id="merge-preview-btn" class="btn btn-primary">⬇ Merge & Preview</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- EXPORT SECTION -->
+        <section class="section">
+            <div class="container">
+                <h3 class="section-heading">Export Your File</h3>
+                <div class="export-btns">
+                    <button id="download-mp4-btn" class="btn btn-primary">⬇ Download MP4</button>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <script src="/js/shared.js"></script>
+    <script src="/js/merge.js"></script>
+    <script src="/js/script.js"></script>
+  <div id="app-footer"></div>
+</body>
+
+</html>

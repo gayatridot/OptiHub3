@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OptiHub3 - Universal File Compressor</title>
+
+    <!-- PDF Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+
+    <!-- FFmpeg.wasm (Updated to cleanly match your v0.12.6 Core engine setup) -->
+    <script type="module">
+        import { FFmpeg } from "https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js";
+        import { toBlobURL, fetchFile } from "https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js";
+
+        window.FFmpegESM = { FFmpeg, toBlobURL, fetchFile };
+        window.dispatchEvent(new Event("ffmpeg-esm-ready"));
+    </script>
+
+    <!-- Fonts & Stylesheets -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- NAVBAR -->
+    <div id="app-header"></div>
+
+    <main>
+        <!-- HERO SECTION -->
+        <section class="hero">
+            <div class="container text-center">
+                <h2>Universal File Compressor</h2>
+                <p>Compress any file type instantly – no quality loss.</p>
+
+                <div class="file-icons">
+                    <span class="file-icon">📹</span>
+                    <span class="file-icon">🖼️</span>
+                    <span class="file-icon">📄</span>
+                    <span class="file-icon">🎵</span>
+                    <span class="file-icon">📑</span>
+                </div>
+
+                <div class="flow-card upload-card">
+                    <div class="flow-card-body upload-box">
+                        <div class="upload-content">
+                            <!-- Added permanent IDs to prevent wiping out DOM structures during file update -->
+                            <div class="upload-icon" id="uploadStatusIcon">⬇️</div>
+                            <p id="uploadStatusText">Drag & Drop or Click to Upload Files</p>
+                            <p id="uploadStatusSize"
+                                style="font-size: 14px; color: var(--text-light); margin-top: 4px; display: none;"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- COMPRESSION SETTINGS -->
+        <section class="tts-section">
+            <div class="container">
+                <h3 class="section-heading">Compression Settings</h3>
+
+                <div class="tts-controls">
+                    <div class="control-group">
+                        <label>Mode:</label>
+                        <button class="btn btn-secondary btn-sm">● Auto</button>
+                        <button class="btn btn-secondary btn-sm">Manual</button>
+                    </div>
+
+                    <div class="control-group">
+                        <label>Compress:</label>
+                        <button class="btn btn-secondary btn-sm">All</button>
+                        <label class="toggle-switch">
+                            <input type="checkbox" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="targetSizeInput">Target Size (MB):</label>
+                        <input id="targetSizeInput" type="number" min="1" step="0.1" value="10" class="voice-select">
+                    </div>
+                    <button class="btn btn-primary" id="compress-btn">
+                        Compress
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- PREVIEW & COMPRESS -->
+        <section class="features">
+            <div class="container">
+                <h3 class="section-heading">Preview & Compress</h3>
+
+                <div class="features-grid" style="display: flex; justify-content: center;">
+                    <div class="feature-card" id="compressedFileCard" style="width: 100%; max-width: 340px;">
+                        <div class="feature-header">
+                            <span class="feature-icon" id="fileIcon">📁</span>
+                            <h4><span id="fileName">UploadedFile</span>.<span class="file-ext" id="fileExt">ext</span>
+                            </h4>
+                        </div>
+                        <p id="fileSizes">Calculating sizes...</p>
+                        <button class="btn btn-primary btn-full" id="singleDownloadBtn">
+                            <svg class="icon-sm" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            Download
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    <script src="/js/shared.js"></script>
+    <script src="/js/compressor.js"></script>
+    <script src="/js/script.js"></script>
+     <div id="app-footer"></div>
+</body>
+
+</html>

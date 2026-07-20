@@ -1,0 +1,11 @@
+{
+  "name": "optihub3",
+  "version": "1.0.0",
+  "description": "Audio & Video Processing Hub — Beta Version",
+  "type": "module",
+  "scripts": {
+    "build": "echo 'Building OptiHub3...'",
+    "dev": "vercel dev"
+  },
+  "license": "ISC"
+}

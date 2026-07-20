@@ -1,0 +1,54 @@
+# ──────────────── Node / npm ────────────────
+node_modules/                # third‑party packages (re‑install with npm install)
+npm-debug.log*               # npm error logs
+yarn.lock                    # if you ever use Yarn (optional)
+package-lock.json            # you can keep this if you want reproducible builds,
+                              # otherwise add it here to ignore the lock file
+
+# ──────────────── Build / Runtime ────────────────
+dist/                        # typical output folder (if you ever add a build step)
+build/                       # idem
+*.log                        # generic log files
+
+# ──────────────── Environment / Secrets ────────────────
+.env                          # would hold API keys if you ever add any
+.env.*                        # any variant (e.g., .env.production)
+
+# ──────────────── OS / Editor artefacts ────────────────
+Thumbs.db
+.DS_Store
+Desktop.ini
+.vscode/                     # personal VS Code workspace settings (optional)
+.idea/                       # JetBrains IDE config (optional)
+
+# ──────────────── Local / CI artefacts ────────────────
+coverage/                     # test coverage reports
+.sass-cache/                  # Sass cache (if ever used)
+.cache/                       # generic cache folder
+tmp/                          # temporary files
+temp/                         # alternative temporary folder
+
+# ──────────────── Generated images / assets (if you ever create them) ────────────────
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+
+# ──────────────── Binary / compiled files (optional) ────────────────
+*.exe
+*.dll
+*.so
+*.a
+*.out
+*.class
+
+# ──────────────── Other generated / artefact folders used by the IDE ────────────────
+# (These are outside the project folder but safe to keep ignored globally)
+# .gemini/   # the Antigravity IDE creates this under the user profile – not part of the repo
+
+# ──────────────── End of .gitignore ────────────────
+.vercel
+.env*
+.env*.local
