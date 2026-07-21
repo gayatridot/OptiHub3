@@ -1,4 +1,4 @@
-function initTTSPage() {
+export function initTTSPage() {
     const scriptInput = document.querySelector(".script-input");
     const voiceSelect = document.getElementById("voice");
     const subtitleToggle = document.querySelector(".toggle-switch input");
@@ -17,7 +17,7 @@ function initTTSPage() {
     let generatedText = "";
 
     // Dynamic self-healing fallback worker resolution logic
-    let workerUrl = `${window.location.origin}/public/tts-worker.js`;
+    let workerUrl = new URL("tts-worker.js", document.baseURI).href;
     let ttsWorker;
 
     try {

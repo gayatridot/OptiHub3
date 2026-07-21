@@ -1,6 +1,6 @@
 console.log("MERGE.JS VERSION: fixed-corepath-v2");
 
-async function initAudioVideoPage() {
+export async function initAudioVideoPage() {
     const changeAudioBtn = document.getElementById("change-audio-btn");
     const changeVideoBtn = document.getElementById("change-video-btn");
     const mergeBtn = document.getElementById("merge-preview-btn");

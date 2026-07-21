@@ -4,8 +4,17 @@
   "description": "Audio & Video Processing Hub — Beta Version",
   "type": "module",
   "scripts": {
-    "build": "echo 'Building OptiHub3...'",
-    "dev": "vercel dev"
+    "build": "node build.js",
+    "dev": "node build.js && node server.js"
   },
-  "license": "ISC"
+  "devDependencies": {
+    "esbuild": "^0.21.5"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "lamejs": "^1.2.1"
+  }
 }

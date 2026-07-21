@@ -1,4 +1,4 @@
-function initCompressorPage() {
+export function initCompressorPage() {
     const uploadBox = document.querySelector(".upload-box");
     const modeButtons = document.querySelectorAll(".control-group:nth-child(1).btn-secondary");
     const compressButtons = document.querySelectorAll(".control-group:nth-child(2).btn-secondary");

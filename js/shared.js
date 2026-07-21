@@ -36,7 +36,7 @@ const footer = `
 </footer>
 `;
 
-function initSidebarNavigation() {
+export function initSidebarNavigation() {
   const menuBtn = document.getElementById("menu-btn");
   const dropdown = document.getElementById("dropdown");
   const overlay = document.getElementById("overlay");
@@ -67,15 +67,14 @@ function initSidebarNavigation() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-
+function initHeaderFooter() {
   const headerContainer = document.getElementById('app-header');
   const footerContainer = document.getElementById('app-footer');
 
   if (headerContainer) headerContainer.innerHTML = navbar;
   if (footerContainer) footerContainer.innerHTML = footer;
 
-  initSidebarNavigation(); // Now this will work
+  initSidebarNavigation();
 
   document.querySelectorAll("details").forEach((detail) => {
     detail.addEventListener("toggle", () => {
@@ -89,4 +88,10 @@ document.addEventListener('DOMContentLoaded', () => {
       window.location.href = "index.html";
     });
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initHeaderFooter);
+} else {
+  initHeaderFooter();
+}

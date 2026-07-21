@@ -1,4 +1,9 @@
-function initIndexPage() {
+import './shared.js';
+import { initTTSPage } from './tts.js';
+import { initCompressorPage } from './compressor.js';
+import { initAudioVideoPage } from './merge.js';
+
+export function initIndexPage() {
     document.querySelectorAll(".btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
             const text = btn.textContent.toLowerCase();
@@ -16,23 +21,26 @@ function initIndexPage() {
     });
 }
 
+function handleRouting() {
+    const path = window.location.pathname;
+    const isIndex = path === "/" || path.endsWith("/index.html") || path.endsWith("/index") || path.endsWith("/");
+    const isTTS = path.endsWith("/tts.html") || path.endsWith("/tts");
+    const isCompressor = path.endsWith("/compressor.html") || path.endsWith("/compressor");
+    const isAudioVideo = path.endsWith("/audio-video.html") || path.endsWith("/audio-video");
 
-
-document.addEventListener("DOMContentLoaded", () => {
-    const page = window.location.pathname.split("/").pop() || "index.html";
-
-    switch (page) {
-        case "index.html":
-            initIndexPage();
-            break;
-        case "tts.html":
-            initTTSPage();
-            break;
-        case "compressor.html":
-            initCompressorPage();
-            break;
-        case "audio-video.html":
-            initAudioVideoPage();
-            break;
+    if (isIndex) {
+        initIndexPage();
+    } else if (isTTS) {
+        initTTSPage();
+    } else if (isCompressor) {
+        initCompressorPage();
+    } else if (isAudioVideo) {
+        initAudioVideoPage();
     }
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', handleRouting);
+} else {
+    handleRouting();
+}
