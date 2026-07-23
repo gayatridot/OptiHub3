@@ -29,9 +29,13 @@ const REWRITES = {
 };
 
 const server = http.createServer((req, res) => {
-  // Add COOP/COEP headers for SharedArrayBuffer support (essential for ffmpeg.wasm)
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+  // Match Vercel headers exactly so local dev behaviour is identical to production.
+  // credentialless (not require-corp) allows cross-origin CDN assets (unpkg, jsDelivr)
+  // without needing CORP headers on those third-party servers, while still enabling
+  // crossOriginIsolated = true for SharedArrayBuffer / ffmpeg.wasm multi-threading.
+  res.setHeader('Cross-Origin-Opener-Policy',  'same-origin');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 
   // Normalize URL path
   let safePath = req.url.split('?')[0];
