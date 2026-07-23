@@ -18,11 +18,11 @@ export function initIndexPage() {
                 e.preventDefault();
                 document.getElementById("features")?.scrollIntoView({ behavior: "smooth" });
             } else if (text.includes("audio") || text.includes("speech")) {
-                window.location.href = "tts.html";
+                window.location.href = "html/tts.html";
             } else if (text.includes("compress") || text.includes("optimize")) {
-                window.location.href = "compressor.html";
+                window.location.href = "html/compressor.html";
             } else if (text.includes("merge") || text.includes("video") || text.includes("media")) {
-                window.location.href = "audio-video.html";
+                window.location.href = "html/audio-video.html";
             }
         });
     });

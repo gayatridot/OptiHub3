@@ -2,8 +2,8 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 
-const PORT = process.env.PORT || 3000;
-const DIST_DIR = path.resolve('dist');
+const PREFERRED_PORT = parseInt(process.env.PORT || '3000', 10);
+const DIST_DIR = path.resolve('.');
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -18,6 +18,14 @@ const MIME_TYPES = {
   '.mp3': 'audio/mpeg',
   '.mp4': 'video/mp4',
   '.wasm': 'application/wasm',
+  '.ico': 'image/x-icon',
+};
+
+const REWRITES = {
+  '/tts': '/html/tts.html',
+  '/audio-video': '/html/audio-video.html',
+  '/compressor': '/html/compressor.html',
+  '/about': '/html/about.html'
 };
 
 const server = http.createServer((req, res) => {
@@ -28,6 +36,11 @@ const server = http.createServer((req, res) => {
   // Normalize URL path
   let safePath = req.url.split('?')[0];
 
+  // Apply URL Rewrites (matching vercel.json)
+  if (REWRITES[safePath]) {
+    safePath = REWRITES[safePath];
+  }
+
   // Resolve to file path
   let filePath = path.join(DIST_DIR, safePath);
 
@@ -36,7 +49,7 @@ const server = http.createServer((req, res) => {
     filePath = path.join(filePath, 'index.html');
   }
 
-  // Support clean URLs (e.g., /tts -> /tts.html)
+  // Support clean URLs dynamically for any other pages just in case
   if (!fs.existsSync(filePath) && !path.extname(filePath)) {
     const htmlFallback = filePath + '.html';
     if (fs.existsSync(htmlFallback)) {
@@ -50,7 +63,7 @@ const server = http.createServer((req, res) => {
   fs.readFile(filePath, (err, content) => {
     if (err) {
       if (err.code === 'ENOENT') {
-        const errorPage = path.join(DIST_DIR, '404.html');
+        const errorPage = path.join(DIST_DIR, 'html', '404.html');
         if (fs.existsSync(errorPage)) {
           res.writeHead(404, { 'Content-Type': 'text/html' });
           res.end(fs.readFileSync(errorPage));
@@ -69,7 +82,23 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`🚀 Local dev server running at http://localhost:${PORT}`);
-  console.log(`🔒 COOP/COEP security headers injected for WebAssembly`);
+function listen(port) {
+  server.listen(port, () => {
+    console.log(`🚀 Local dev server running at http://localhost:${port}`);
+    console.log(`🔒 COOP/COEP security headers injected for WebAssembly`);
+  });
+}
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    const next = err.port + 1;
+    console.warn(`⚠️  Port ${err.port} in use — retrying on port ${next}...`);
+    server.close();
+    listen(next);
+  } else {
+    console.error('Server error:', err);
+    process.exit(1);
+  }
 });
+
+listen(PREFERRED_PORT);

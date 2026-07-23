@@ -2,17 +2,26 @@
 <html lang="en">
 
 <head>
+    <script src="../coi-serviceworker.min.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OptiHub3 - Audio to Video</title>
    
-     <script src="https://cdnjs.cloudflare.com/ajax/libs/coi-serviceworker/0.1.7/coi-serviceworker.min.js" crossorigin="anonymous"></script>
     <link rel="icon" href="data:,">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- FFmpeg.wasm ESM Loader -->
+    <script type="module">
+        import { FFmpeg } from "https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js";
+        import { toBlobURL, fetchFile } from "https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js";
+
+        window.FFmpegESM = { FFmpeg, toBlobURL, fetchFile };
+        window.dispatchEvent(new Event("ffmpeg-esm-ready"));
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" crossorigin="anonymous">
-    <link rel="stylesheet" href="./style.css">
-    <script src="./js/script.js" type="module"></script>
+    <link rel="stylesheet" href="../style.css">
+    <script src="../js/script.js" type="module"></script>
 </head>
 
 <body>

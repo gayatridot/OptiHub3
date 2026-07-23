@@ -1,4 +1,38 @@
-console.log("MERGE.JS VERSION: fixed-corepath-v2");
+// js/merge.js
+console.log("MERGE.JS VERSION: restored-stable");
+
+let ffmpegInstance = null;
+
+async function getFFmpeg() {
+    if (ffmpegInstance) return { ffmpeg: ffmpegInstance, fetchFile: window.FFmpegESM.fetchFile };
+
+    if (!window.FFmpegESM) {
+        await new Promise(resolve => window.addEventListener("ffmpeg-esm-ready", resolve, { once: true }));
+    }
+
+    const { FFmpeg, toBlobURL, fetchFile } = window.FFmpegESM;
+    ffmpegInstance = new FFmpeg();
+    ffmpegInstance.on("log", ({ message }) => console.log("[FFmpeg Log]:", message));
+
+    const isIsolated = window.crossOriginIsolated;
+    const coreBase = isIsolated
+        ? "https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm"
+        : "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
+
+    const classWorkerURL = await toBlobURL(
+        new URL('../ffmpeg-worker/worker.js', import.meta.url).href,
+        'text/javascript'
+    );
+
+    await ffmpegInstance.load({
+        coreURL: await toBlobURL(`${coreBase}/ffmpeg-core.js`, "text/javascript"),
+        wasmURL: await toBlobURL(`${coreBase}/ffmpeg-core.wasm`, "application/wasm"),
+        workerURL: isIsolated ? await toBlobURL(`${coreBase}/ffmpeg-core.worker.js`, "text/javascript") : undefined,
+        classWorkerURL: classWorkerURL
+    });
+
+    return { ffmpeg: ffmpegInstance, fetchFile };
+}
 
 export async function initAudioVideoPage() {
     const changeAudioBtn = document.getElementById("change-audio-btn");
@@ -6,6 +40,8 @@ export async function initAudioVideoPage() {
     const mergeBtn = document.getElementById("merge-preview-btn");
     const downloadMp4Btn = document.getElementById("download-mp4-btn");
     const previewBox = document.getElementById("preview-box");
+
+    if (!changeAudioBtn || !changeVideoBtn || !mergeBtn) return;
 
     const audioInput = document.createElement("input");
     audioInput.type = "file";
@@ -19,23 +55,12 @@ export async function initAudioVideoPage() {
     let videoFile = null;
     let mergedBlobUrl = null;
 
-    const FFMPEG_CDN = "https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js";
-    const FFMPEG_CORE_PATH = "https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js";
-
-    const loadScript = (url) => new Promise((resolve, reject) => {
-        if (typeof window.FFmpeg !== "undefined") return resolve();
-        const script = document.createElement("script");
-        script.src = url;
-        script.onload = resolve;
-        script.onerror = reject;
-        document.head.appendChild(script);
-    });
-
     changeAudioBtn.addEventListener("click", () => audioInput.click());
     audioInput.addEventListener("change", e => {
         if (e.target.files.length > 0) {
             audioFile = e.target.files[0];
-            document.getElementById("audio-file-info").textContent = `♪ ${audioFile.name}`;
+            const audioInfo = document.getElementById("audio-file-info");
+            if (audioInfo) audioInfo.textContent = `♪ ${audioFile.name}`;
         }
     });
 
@@ -43,13 +68,16 @@ export async function initAudioVideoPage() {
     videoInput.addEventListener("change", e => {
         if (e.target.files.length > 0) {
             videoFile = e.target.files[0];
-            document.getElementById("video-file-info").textContent = `📄 ${videoFile.name}`;
+            const videoInfo = document.getElementById("video-file-info");
+            if (videoInfo) videoInfo.textContent = `📄 ${videoFile.name}`;
 
-            previewBox.innerHTML = `
-                <video id="preview-video-element" style="width: 100%; max-height: 450px; border-radius: 8px;" controls>
-                    <source src="${URL.createObjectURL(videoFile)}" type="${videoFile.type}">
-                </video>
-            `;
+            if (previewBox) {
+                previewBox.innerHTML = `
+                    <video id="preview-video-element" style="width: 100%; max-height: 450px; border-radius: 8px;" controls>
+                        <source src="${URL.createObjectURL(videoFile)}" type="${videoFile.type}">
+                    </video>
+                `;
+            }
         }
     });
 
@@ -60,21 +88,13 @@ export async function initAudioVideoPage() {
         }
 
         const originalText = mergeBtn.textContent;
-        mergeBtn.textContent = "Merging tracks...";
+        mergeBtn.textContent = "Loading Engine...";
         mergeBtn.disabled = true;
 
         let progressTimer;
 
         try {
-            await loadScript(FFMPEG_CDN);
-
-            const { createFFmpeg, fetchFile } = window.FFmpeg;
-            const ffmpeg = createFFmpeg({
-                log: true,
-                corePath: FFMPEG_CORE_PATH
-            });
-
-            await ffmpeg.load();
+            const { ffmpeg, fetchFile } = await getFFmpeg();
 
             const audioExt = audioFile.name.split('.').pop() || 'mp3';
             const videoExt = videoFile.name.split('.').pop() || 'mp4';
@@ -87,10 +107,23 @@ export async function initAudioVideoPage() {
                 mergeBtn.textContent = `Merging${".".repeat(dots)}`;
             }, 400);
 
-            ffmpeg.FS("writeFile", inputAudioName, await fetchFile(audioFile));
-            ffmpeg.FS("writeFile", inputVideoName, await fetchFile(videoFile));
+            // Ensure input files are proper Uint8Array for ffmpeg VFS
+            const audioData = audioFile instanceof Uint8Array
+                ? audioFile
+                : new Uint8Array(await audioFile.arrayBuffer());
+            const videoData = videoFile instanceof Uint8Array
+                ? videoFile
+                : new Uint8Array(await videoFile.arrayBuffer());
 
-            await ffmpeg.run(
+            // Pre-clean all three VFS paths so re-merges never collide on existing files
+            try { await ffmpeg.deleteFile(inputAudioName); } catch (_) {}
+            try { await ffmpeg.deleteFile(inputVideoName); } catch (_) {}
+            try { await ffmpeg.deleteFile("output.mp4");   } catch (_) {}
+
+            await ffmpeg.writeFile(inputAudioName, audioData);
+            await ffmpeg.writeFile(inputVideoName, videoData);
+
+            await ffmpeg.exec([
                 "-i", inputVideoName,
                 "-i", inputAudioName,
                 "-c:v", "copy",
@@ -99,52 +132,60 @@ export async function initAudioVideoPage() {
                 "-map", "1:a:0",
                 "-shortest",
                 "output.mp4"
-            );
+            ]);
 
             clearInterval(progressTimer);
 
-            const data = ffmpeg.FS("readFile", "output.mp4");
+            const data = await ffmpeg.readFile("output.mp4");
             const finalBlob = new Blob([data.buffer], { type: "video/mp4" });
 
             if (mergedBlobUrl) URL.revokeObjectURL(mergedBlobUrl);
             mergedBlobUrl = URL.createObjectURL(finalBlob);
 
-            previewBox.innerHTML = `
-                <video id="preview-video-element" style="width: 100%; max-height: 450px; border-radius: 8px;" controls controlslist="nodownload">
-                    <source src="${mergedBlobUrl}" type="video/mp4">
-                </video>
-            `;
+            if (previewBox) {
+                previewBox.innerHTML = `
+                    <video id="preview-video-element" style="width: 100%; max-height: 450px; border-radius: 8px;" controls controlslist="nodownload">
+                        <source src="${mergedBlobUrl}" type="video/mp4">
+                    </video>
+                `;
+            }
 
             const videoEl = document.getElementById("preview-video-element");
-            if (videoEl) videoEl.play().catch(() => {});
+            if (videoEl) videoEl.play().catch(() => { });
 
-            alert("Audio successfully synchronized with video clip completely free!");
+            alert("Audio successfully synchronized with video clip!");
 
-            ffmpeg.FS("unlink", inputAudioName);
-            ffmpeg.FS("unlink", inputVideoName);
-            ffmpeg.FS("unlink", "output.mp4");
+            try {
+                await ffmpeg.deleteFile(inputAudioName);
+                await ffmpeg.deleteFile(inputVideoName);
+                await ffmpeg.deleteFile("output.mp4");
+            } catch (cleanupErr) {
+                console.warn("Cleanup error in merge VFS:", cleanupErr);
+            }
 
         } catch (error) {
-            if (progressTimer) clearInterval(progressTimer);
             console.error("Muxing operation exception caught:", error);
-            alert("An error occurred during merging. Please make sure the uploaded files are valid.");
+            alert("An error occurred during merging. Check F12 Console for details.");
         } finally {
+            if (progressTimer) clearInterval(progressTimer);
             mergeBtn.textContent = originalText;
             mergeBtn.disabled = false;
         }
     });
 
-    downloadMp4Btn.addEventListener("click", () => {
-        if (!mergedBlobUrl) {
-            alert("Please click 'Merge & Preview' to process the files before downloading.");
-            return;
-        }
-        const a = document.createElement("a");
-        a.style.display = "none";
-        a.href = mergedBlobUrl;
-        a.download = "scriptsync_final_output.mp4";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    });
+    if (downloadMp4Btn) {
+        downloadMp4Btn.addEventListener("click", () => {
+            if (!mergedBlobUrl) {
+                alert("Please process the files before downloading.");
+                return;
+            }
+            const a = document.createElement("a");
+            a.style.display = "none";
+            a.href = mergedBlobUrl;
+            a.download = "scriptsync_final_output.mp4";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        });
+    }
 }

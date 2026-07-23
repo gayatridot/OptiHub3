@@ -4,20 +4,15 @@
     {
       "source": "/(.*)",
       "headers": [
-        {
-          "key": "Cross-Origin-Opener-Policy",
-          "value": "same-origin"
-        },
-        {
-          "key": "Cross-Origin-Embedder-Policy",
-          "value": "require-corp"
-        }
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+        { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" }
       ]
     }
   ],
   "rewrites": [
-    { "source": "/tts", "destination": "/tts.html" },
-    { "source": "/audio-video", "destination": "/audio-video.html" },
-    { "source": "/compressor", "destination": "/compressor.html" }
+    { "source": "/tts", "destination": "/html/tts.html" },
+    { "source": "/audio-video", "destination": "/html/audio-video.html" },
+    { "source": "/compressor", "destination": "/html/compressor.html" },
+    { "source": "/about", "destination": "/html/about.html" }
   ]
 }

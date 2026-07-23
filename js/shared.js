@@ -1,4 +1,15 @@
 // 1. Centralized Templates
+const isSubfolder = window.location.pathname.includes('/html/') || 
+                    window.location.pathname === '/tts' ||
+                    window.location.pathname === '/audio-video' ||
+                    window.location.pathname === '/compressor' ||
+                    window.location.pathname === '/about';
+const homeLink = isSubfolder ? '../index.html' : 'index.html';
+const ttsLink = isSubfolder ? 'tts.html' : 'html/tts.html';
+const avLink = isSubfolder ? 'audio-video.html' : 'html/audio-video.html';
+const compLink = isSubfolder ? 'compressor.html' : 'html/compressor.html';
+const aboutLink = isSubfolder ? 'about.html' : 'html/about.html';
+
 const navbar = `
 <header class="navbar">
   <div class="container">
@@ -9,22 +20,22 @@ const navbar = `
       <h1>Opti<span>Hub3</span></h1>
     </div>
     <nav class="nav-links">
-      <a href="index.html">Home</a>
-      <a href="tts.html">TTS</a>
-      <a href="audio-video.html">Merge Audio-Video</a>
-      <a href="compressor.html">Compress Files</a>
-      <a href="about.html">About</a>
+      <a href="${homeLink}">Home</a>
+      <a href="${ttsLink}">TTS</a>
+      <a href="${avLink}">Merge Audio-Video</a>
+      <a href="${compLink}">Compress Files</a>
+      <a href="${aboutLink}">About</a>
     </nav>
     <button id="menu-btn">☰</button>
   </div>
 </header>
 
 <div id="dropdown" class="dropdown">
- <a href="index.html">Home</a>
-      <a href="tts.html">TTS</a>
-      <a href="audio-video.html">Merge Audio-Video</a>
-      <a href="compressor.html">Compress Files</a>
-      <a href="about.html">About</a>
+      <a href="${homeLink}">Home</a>
+      <a href="${ttsLink}">TTS</a>
+      <a href="${avLink}">Merge Audio-Video</a>
+      <a href="${compLink}">Compress Files</a>
+      <a href="${aboutLink}">About</a>
 </div>
 <div id="overlay"></div>
 `;
@@ -85,7 +96,7 @@ function initHeaderFooter() {
   const btnOpti = document.getElementById("btn-opti");
   if (btnOpti) {
     btnOpti.addEventListener("click", () => {
-      window.location.href = "index.html";
+      window.location.href = homeLink;
     });
   }
 }

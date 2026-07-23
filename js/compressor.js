@@ -53,19 +53,27 @@ export function initCompressorPage() {
             }
             const { FFmpeg, toBlobURL } = window.FFmpegESM;
             ffmpeg = new FFmpeg();
-            ffmpeg.on("log", ({ message }) => console.log("[ffmpeg]", message));
+            ffmpeg.on("log", ({ message }) => console.log("[FFmpeg Log]:", message));
             ffmpeg.on("progress", ({ progress }) => {
                 const percent = Math.min(100, Math.round(progress * 100));
                 if (fileSizesElement) fileSizesElement.textContent = `Compressing: ${percent}%`;
             });
 
-            const coreBase = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
-            const workerAbsoluteURL = new URL("ffmpeg-worker/worker.js", document.baseURI).href;
+            const isIsolated = window.crossOriginIsolated;
+            const coreBase = isIsolated 
+              ? "https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm"
+              : "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
+
+            const classWorkerURL = await toBlobURL(
+                new URL('../ffmpeg-worker/worker.js', import.meta.url).href, 
+                'text/javascript'
+            );
 
             await ffmpeg.load({
                 coreURL: await toBlobURL(`${coreBase}/ffmpeg-core.js`, "text/javascript"),
                 wasmURL: await toBlobURL(`${coreBase}/ffmpeg-core.wasm`, "application/wasm"),
-                classWorkerURL: workerAbsoluteURL,
+                workerURL: isIsolated ? await toBlobURL(`${coreBase}/ffmpeg-core.worker.js`, "text/javascript") : undefined,
+                classWorkerURL: classWorkerURL
             });
             return ffmpeg;
         } catch (err) {
@@ -78,13 +86,21 @@ export function initCompressorPage() {
     async function processWithFFmpeg(file, outputName, args, ext) {
         const instance = await loadFFmpeg();
         if (!instance) throw new Error("Compression engine failed to load");
-        const { fetchFile } = window.FFmpegESM;
         const inputName = `input.${ext}`;
 
-        await instance.writeFile(inputName, await fetchFile(file));
+        // Pre-clean VFS paths so repeated compression runs never collide on stale files
+        try { await instance.deleteFile(inputName); }  catch (_) {}
+        try { await instance.deleteFile(outputName); } catch (_) {}
+
+        await instance.writeFile(inputName, new Uint8Array(await file.arrayBuffer()));
         await instance.exec(args);
         const data = await instance.readFile(outputName);
-        return new Blob([data.buffer], { type: outputName.endsWith('.mp4') ? "video/mp4" : "audio/mp3" });
+        let blobType = "application/octet-stream";
+        if (outputName.endsWith('.mp4')) blobType = "video/mp4";
+        if (outputName.endsWith('.aac') || outputName.endsWith('.m4a')) blobType = "audio/mp4";
+        if (outputName.endsWith('.mp3')) blobType = "audio/mp3";
+        if (outputName.endsWith('.wav')) blobType = "audio/wav";
+        return new Blob([data.buffer], { type: blobType });
     }
 
     // Unified Iterative Media Encoder for Audio/Video
@@ -97,27 +113,41 @@ export function initCompressorPage() {
         let attempts = 0;
         let finalBlob;
         const minBitrate = isVideo ? 100 : 32;
-        const outputName = isVideo ? "output.mp4" : "output.mp3";
+        let outputName = isVideo ? "output.mp4" : "output.aac";
 
         while (attempts < 4) {
             fileSizesElement.textContent = `Encoding ${isVideo ? 'video' : 'audio'} at ${bitrate}kbps (attempt ${attempts + 1})...`;
             
             const args = isVideo ? [
                 "-i", `input.${ext}`, "-vf", "scale=-2:480,fps=24", "-vcodec", "mpeg4",
+                "-preset", "ultrafast",
                 "-b:v", `${bitrate}k`, "-acodec", "aac", "-b:a", `${audioBitrate}k`, outputName
             ] : [
-                "-i", `input.${ext}`, "-b:a", `${bitrate}k`, "-ar", "44100", "-ac", "2", outputName
+                "-i", `input.${ext}`, "-c:a", "aac", "-b:a", `${bitrate}k`, "-ac", "1", outputName
             ];
 
-            finalBlob = await processWithFFmpeg(file, outputName, args, ext);
-            const resultSizeMB = finalBlob.size / (1024 * 1024);
+            try {
+                finalBlob = await processWithFFmpeg(file, outputName, args, ext);
+                const resultSizeMB = finalBlob.size / (1024 * 1024);
 
-            if (resultSizeMB <= targetNum || bitrate <= minBitrate) break;
+                if (resultSizeMB <= targetNum || bitrate <= minBitrate) break;
 
-            // Scale bitrate down proportionally
-            const scaleFactor = isVideo ? 0.9 : 0.92;
-            bitrate = Math.max(minBitrate, Math.floor(bitrate * (targetNum / resultSizeMB) * scaleFactor));
-            attempts++;
+                // Scale bitrate down proportionally
+                const scaleFactor = isVideo ? 0.9 : 0.92;
+                bitrate = Math.max(minBitrate, Math.floor(bitrate * (targetNum / resultSizeMB) * scaleFactor));
+                attempts++;
+            } catch (err) {
+                console.error(`[FFmpeg Log]: Compression attempt ${attempts + 1} failed:`, err);
+                if (!isVideo && attempts === 0) {
+                    fileSizesElement.textContent = "Audio encoding failed, falling back to 64k AAC...";
+                    outputName = "fallback.aac";
+                    finalBlob = await processWithFFmpeg(file, outputName, [
+                        "-i", `input.${ext}`, "-c:a", "aac", "-b:a", "64k", "-ac", "1", outputName
+                    ], ext);
+                    break;
+                }
+                throw err;
+            }
         }
         return finalBlob;
     }
@@ -259,7 +289,7 @@ export function initCompressorPage() {
                 activeFileBlob = await compressMediaWithRetry({
                     file: selectedFile, ext, durationSec, targetNum, isVideo
                 });
-                activeFileName = `${coreName}.${isVideo ? 'mp4' : 'mp3'}`;
+                activeFileName = `${coreName}.${isVideo ? 'mp4' : 'aac'}`;
             }
             else if (selectedFile.type.startsWith("image/")) {
                 fileSizesElement.textContent = "Optimizing image...";

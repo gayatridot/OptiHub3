@@ -15,14 +15,49 @@ export function initTTSPage() {
     const btnFallback = document.getElementById("btn-fallback");
     const statusBanner = document.getElementById("tts-status-banner");
 
-    let chunkBuffers = []; 
-    let combinedWavBlob = null; 
+    let chunkBuffers = [];
+    let combinedWavBlob = null;
     let audioEngine = new Audio();
     let generatedText = "";
-    
+
     let fallbackMode = false;
     let loadingTimeoutId = null;
     let lastProgress = 0;
+
+    let ffmpegInstance = null;
+
+    async function getFFmpeg() {
+        if (ffmpegInstance) return ffmpegInstance;
+        try {
+            if (!window.FFmpegESM) {
+                await new Promise(resolve => window.addEventListener("ffmpeg-esm-ready", resolve, { once: true }));
+            }
+            const { FFmpeg, toBlobURL } = window.FFmpegESM;
+            ffmpegInstance = new FFmpeg();
+            ffmpegInstance.on("log", ({ message }) => console.log("[FFmpeg Log]:", message));
+
+            const isIsolated = window.crossOriginIsolated;
+            const coreBase = isIsolated
+                ? "https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm"
+                : "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
+
+            const classWorkerURL = await toBlobURL(
+                new URL('../ffmpeg-worker/worker.js', import.meta.url).href,
+                'text/javascript'
+            );
+
+            await ffmpegInstance.load({
+                coreURL: await toBlobURL(`${coreBase}/ffmpeg-core.js`, "text/javascript"),
+                wasmURL: await toBlobURL(`${coreBase}/ffmpeg-core.wasm`, "application/wasm"),
+                workerURL: isIsolated ? await toBlobURL(`${coreBase}/ffmpeg-core.worker.js`, "text/javascript") : undefined,
+                classWorkerURL: classWorkerURL
+            });
+            return ffmpegInstance;
+        } catch (err) {
+            console.error("FFmpeg failed to load in TTS.", err);
+            return null;
+        }
+    }
 
     function showError(msg) {
         if (statusBanner) {
@@ -51,20 +86,20 @@ export function initTTSPage() {
 
     function startProgressTimeout() {
         clearTimeout(loadingTimeoutId);
+        // 90s: VITS ONNX model is 60-80 MB — 15s was too short for first-load CDN downloads
         loadingTimeoutId = setTimeout(() => {
             if (lastProgress < 100 && !fallbackMode) {
                 if (ttsWorker) ttsWorker.terminate();
-                fallbackToRootWorker();
-                showError("Progress stalled for 15s. Network may have timed out.");
+                ttsWorker = null;
+                showError("Progress stalled (90s). Check your network connection.");
             }
-        }, 15000);
+        }, 90000);
     }
 
     btnRetry?.addEventListener("click", () => {
         resetUI();
-        if (ttsWorker) ttsWorker.terminate();
-        ttsWorker = new Worker(workerUrl, { type: 'module' });
-        setupWorkerHandlers();
+        if (ttsWorker) { ttsWorker.terminate(); ttsWorker = null; }
+        spawnWorker();
         generateBtn.click();
     });
 
@@ -79,101 +114,119 @@ export function initTTSPage() {
         }
     });
 
-    // Dynamic self-healing fallback worker resolution logic
-    let workerUrl = new URL("tts-worker.js", document.baseURI).href;
-    let ttsWorker;
+    // Resolve worker path relative to the JS module file, not the HTML page,
+    // so it works correctly from both /html/*.html and clean-URL routes.
+    const workerUrl = new URL('./tts-worker.js', import.meta.url).href;
+    let ttsWorker = null;
 
-    try {
-        ttsWorker = new Worker(workerUrl, { type: 'module' });
-        setupWorkerHandlers();
-    } catch (e) {
-        fallbackToRootWorker();
-    }
-
-    function fallbackToRootWorker() {
-        console.warn("Primary path failed. Attempting root fallback deployment mapping...");
-        workerUrl = `${window.location.origin}/tts-worker.js`;
+    function spawnWorker() {
         try {
             ttsWorker = new Worker(workerUrl, { type: 'module' });
             setupWorkerHandlers();
+            console.log("[TTS] Worker spawned:", workerUrl);
         } catch (err) {
-            console.error("Critical: All worker route initializations failed.", err);
+            console.error("[TTS] Worker spawn failed:", err);
+            ttsWorker = null;
         }
     }
 
-    function setupWorkerHandlers() {
-        ttsWorker.onerror = (event) => {
-            // Catching silent 404 network routing drops before throwing user alerts
-            if (!event.message && workerUrl.includes("/public/")) {
-                ttsWorker.terminate();
-                fallbackToRootWorker();
-                return;
-            }
+    spawnWorker();
 
-            const errorMsg = event.message || "Failed to download worker script (404 Not Found or CORS restriction)";
-            console.error("CRITICAL WORKER LIFECYCLE CRASH:", errorMsg, "at:", workerUrl);
-            
+    // Keep for compatibility (btnRetry still calls this name)
+    function fallbackToRootWorker() {
+        spawnWorker();
+    }
+
+    function setupWorkerHandlers() {
+        if (!ttsWorker) return;
+
+        ttsWorker.onerror = (event) => {
+            const errorMsg = event.message || "Worker script failed to load (404 or CORS). Check the console.";
+            console.error("[TTS] Worker error:", errorMsg);
+            clearTimeout(loadingTimeoutId);
+            // Restore generate button so the user isn't locked out
+            if (generateBtn) {
+                generateBtn.style.display = "inline-flex";
+                generateBtn.disabled = false;
+                generateBtn.textContent = "Generate Audio";
+            }
             showError(errorMsg);
         };
 
         ttsWorker.onmessage = async (e) => {
             const { status, buffer, progress, error, message } = e.data;
 
+            // Reset stall timer on every progress signal
             if (status === "loading" || status === "chunk") {
                 lastProgress = progress || 0;
                 startProgressTimeout();
             }
 
             if (status === "loading") {
-                generateBtn.textContent = `${message || "Loading..."} ${progress}%`;
+                if (generateBtn) generateBtn.textContent = `${message || "Loading..."} ${progress}%`;
             } else if (status === "chunk") {
                 chunkBuffers.push(buffer);
-                generateBtn.textContent = `Generating... ${progress}%`;
-                
+                if (generateBtn) generateBtn.textContent = `Generating... ${progress}%`;
+
                 if (chunkBuffers.length === 1) {
                     const initialBlob = new Blob([buffer], { type: 'audio/wav' });
                     audioEngine.src = URL.createObjectURL(initialBlob);
                     audioEngine.load();
                     audioEngine.addEventListener("loadedmetadata", () => {
-                        durationEl.textContent = formatTime(audioEngine.duration);
-                    });
-                    downloadBtn.disabled = false;
-                    previewOverlayText.textContent = subtitleToggle?.checked ? generatedText : "Voiceover streaming...";
+                        if (durationEl) durationEl.textContent = formatTime(audioEngine.duration);
+                    }, { once: true });
+                    if (previewOverlayText) previewOverlayText.textContent = subtitleToggle?.checked ? generatedText : "Voiceover streaming...";
                 }
             } else if (status === "done") {
-                generateBtn.disabled = false;
-                generateBtn.textContent = "Generate Audio";
-                previewOverlayText.textContent = subtitleToggle?.checked ? generatedText : "Voiceover synthesized!";
-                
+                // Clear stall timer immediately — don't let it fire during the WAV merge step
+                clearTimeout(loadingTimeoutId);
+
+                if (previewOverlayText) previewOverlayText.textContent = subtitleToggle?.checked ? generatedText : "Voiceover synthesized!";
+
+                // Await the full WAV assembly before enabling download (prevents race condition)
                 combinedWavBlob = await mergeWavBuffersToMasterBlob(chunkBuffers);
-                
+
+                if (generateBtn) {
+                    generateBtn.disabled = false;
+                    generateBtn.style.display = "inline-flex";
+                    generateBtn.textContent = "Generate Audio";
+                }
+
                 const currentPosition = audioEngine.currentTime;
                 const wasPlaying = !audioEngine.paused;
-                
+
                 audioEngine.src = URL.createObjectURL(combinedWavBlob);
                 audioEngine.load();
                 audioEngine.currentTime = currentPosition;
                 if (wasPlaying) audioEngine.play();
-                clearTimeout(loadingTimeoutId);
+
+                if (downloadBtn) downloadBtn.disabled = false;
             } else if (status === "error") {
-                console.error("MODEL ERROR SENT FROM WORKER:", error);
+                console.error("[TTS] Worker reported error:", error);
+                clearTimeout(loadingTimeoutId);
+                // Restore generate button before showing error so user can retry
+                if (generateBtn) {
+                    generateBtn.style.display = "inline-flex";
+                    generateBtn.disabled = false;
+                    generateBtn.textContent = "Generate Audio";
+                }
                 showError(error);
             }
         };
     }
 
     const progressFill = document.createElement("div");
-    progressFill.style.position = "absolute"; 
-    progressFill.style.top = "0"; 
+    progressFill.style.position = "absolute";
+    progressFill.style.top = "0";
     progressFill.style.left = "0";
-    progressFill.style.height = "100%"; 
-    progressFill.style.width = "0%"; 
+    progressFill.style.height = "100%";
+    progressFill.style.width = "0%";
     progressFill.style.background = "var(--primary, #007bff)";
-    progressFill.style.borderRadius = "inherit"; 
+    progressFill.style.borderRadius = "inherit";
     progressFill.style.pointerEvents = "none";
     if (waveform) {
-        waveform.style.position = "relative"; 
-        waveform.style.overflow = "hidden"; 
+        waveform.style.position = "relative";
+        waveform.style.overflow = "hidden";
         waveform.style.cursor = "pointer";
         waveform.appendChild(progressFill);
     }
@@ -202,13 +255,13 @@ export function initTTSPage() {
         const decodedBuffers = await Promise.all(
             buffers.map(buf => audioCtx.decodeAudioData(buf.slice(0)))
         );
-        
+
         if (decodedBuffers.length === 0) return null;
 
         const totalLength = decodedBuffers.reduce((acc, buf) => acc + buf.length, 0);
         const sampleRate = decodedBuffers[0].sampleRate;
         const numberOfChannels = decodedBuffers[0].numberOfChannels;
-        
+
         const outputBuffer = audioCtx.createBuffer(numberOfChannels, totalLength, sampleRate);
 
         for (let channel = 0; channel < numberOfChannels; channel++) {
@@ -236,18 +289,18 @@ export function initTTSPage() {
         function setUint32(data) { view.setUint32(pos, data, true); pos += 4; }
 
         setUint32(0x46464952);
-        setUint32(length - 8);                         
+        setUint32(length - 8);
         setUint32(0x45564157);
         setUint32(0x20746d66);
-        setUint32(16);                                 
+        setUint32(16);
         setUint16(1);
         setUint16(numOfChan);
         setUint32(audioBuffer.sampleRate);
-        setUint32(audioBuffer.sampleRate * 2 * numOfChan); 
-        setUint16(numOfChan * 2);                      
+        setUint32(audioBuffer.sampleRate * 2 * numOfChan);
+        setUint16(numOfChan * 2);
         setUint16(16);
         setUint32(0x61746164);
-        setUint32(length - pos - 4);                   
+        setUint32(length - pos - 4);
 
         for (i = 0; i < audioBuffer.numberOfChannels; i++) {
             channels.push(audioBuffer.getChannelData(i));
@@ -276,10 +329,10 @@ export function initTTSPage() {
         if (fallbackMode) {
             generateBtn.disabled = true;
             generateBtn.textContent = "Synthesizing...";
-            
+
             window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
-            
+
             const isFemale = voiceSelect.value.toLowerCase().includes("female");
             const voices = window.speechSynthesis.getVoices();
             if (voices.length > 0) {
@@ -291,18 +344,19 @@ export function initTTSPage() {
                 previewOverlayText.textContent = subtitleToggle?.checked ? generatedText : "Voiceover playing via browser...";
                 durationEl.textContent = "--:--";
             };
-            
+
             utterance.onend = () => {
                 generateBtn.disabled = false;
                 generateBtn.textContent = "Synthesize (Browser Fallback)";
             };
-            
+
             window.speechSynthesis.speak(utterance);
             return;
         }
 
         chunkBuffers = [];
         combinedWavBlob = null;
+        downloadBtn.disabled = true;
 
         const selectedOption = voiceSelect.value.toLowerCase();
         const isHindi = selectedOption.includes("hindi");
@@ -314,15 +368,14 @@ export function initTTSPage() {
         lastProgress = 0;
         startProgressTimeout();
 
-        downloadBtn.disabled = true;
-
         if (ttsWorker) {
             ttsWorker.postMessage({ action: "generate", text, voiceKey });
         }
     });
 
     playBtn?.addEventListener("click", () => {
-        if (!audioEngine.src) return;
+        // audioEngine.src is always a string; use readyState to test if media is loaded
+        if (audioEngine.readyState === 0) return;
         if (!audioEngine.paused) {
             audioEngine.pause();
             playBtn.textContent = "▶";
@@ -333,41 +386,69 @@ export function initTTSPage() {
     });
 
     downloadBtn?.addEventListener("click", async () => {
-        if (!combinedWavBlob) return;
+        if (!combinedWavBlob) {
+            alert("Audio is still being processed. Please wait for generation to complete.");
+            return;
+        }
 
         downloadBtn.disabled = true;
         downloadBtn.textContent = "Encoding MP3...";
 
-        if (typeof ffmpeg !== 'undefined') {
-            try {
+        try {
+            const ffmpeg = await getFFmpeg();
+            if (ffmpeg) {
+                // Remove stale VFS files from any previous encode run
+                try { await ffmpeg.deleteFile('input.wav'); } catch (_) {}
+                try { await ffmpeg.deleteFile('output.mp3'); } catch (_) {}
+                try { await ffmpeg.deleteFile('output.aac'); } catch (_) {}
+
                 const arrayBuffer = await combinedWavBlob.arrayBuffer();
                 await ffmpeg.writeFile('input.wav', new Uint8Array(arrayBuffer));
-                await ffmpeg.exec(['-i', 'input.wav', '-codec:a', 'libmp3lame', '-q:a', '4', 'output.mp3']);
 
-                const mp3Data = await ffmpeg.readFile('output.mp3');
-                const mp3Blob = new Blob([mp3Data.buffer], { type: 'audio/mp3' });
-                const mp3Url = URL.createObjectURL(mp3Blob);
+                let finalData = null;
+                let finalType = 'audio/mp3';
+                let finalExt = 'mp3';
+
+                try {
+                    await ffmpeg.exec(['-i', 'input.wav', '-c:a', 'libmp3lame', '-q:a', '2', 'output.mp3']);
+                    finalData = await ffmpeg.readFile('output.mp3');
+                } catch (mp3Err) {
+                    console.warn("MP3 encoding failed, attempting AAC fallback:", mp3Err);
+                    try {
+                        await ffmpeg.exec(['-i', 'input.wav', '-c:a', 'aac', '-b:a', '128k', 'output.aac']);
+                        finalData = await ffmpeg.readFile('output.aac');
+                        finalType = 'audio/aac';
+                        finalExt = 'aac';
+                    } catch (aacErr) {
+                        throw new Error("Both MP3 and AAC encoding failed");
+                    }
+                }
+
+                const outBlob = new Blob([finalData.buffer], { type: finalType });
+                const outUrl = URL.createObjectURL(outBlob);
 
                 const a = document.createElement("a");
-                a.href = mp3Url;
-                a.download = "optihub_voiceover.mp3"; 
+                a.href = outUrl;
+                a.download = `optihub_voiceover.${finalExt}`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
 
-                await ffmpeg.deleteFile('input.wav');
-                await ffmpeg.deleteFile('output.mp3');
-            } catch (err) {
-                console.error("FFmpeg runtime conversion error, falling back to WAV:", err);
+                // Clean up only the file that was actually written
+                try { await ffmpeg.deleteFile('input.wav'); } catch (_) {}
+                try { await ffmpeg.deleteFile(`output.${finalExt}`); } catch (_) {}
+            } else {
+                console.warn("FFmpeg not available. Downloading native WAV fallback.");
                 triggerWavFallback();
             }
-        } else {
-            console.warn("FFmpeg library not initialized in DOM. Downloading native WAV fallback.");
+        } catch (err) {
+            console.error("FFmpeg compression error, falling back to WAV:", err);
             triggerWavFallback();
+        } finally {
+            // Always restore button — even if an error or early return occurred
+            downloadBtn.disabled = false;
+            downloadBtn.textContent = "Download MP3";
         }
-
-        downloadBtn.disabled = false;
-        downloadBtn.textContent = "Download MP3";
     });
 
     function triggerWavFallback() {
