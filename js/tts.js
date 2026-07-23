@@ -86,17 +86,17 @@ export function initTTSPage() {
 
     function startProgressTimeout() {
         clearTimeout(loadingTimeoutId);
-        // Must be > FIRST_SENTENCE_TIMEOUT_MS (180s) in tts-worker.js.
-        // The worker's own per-sentence timeout fires first and posts a clean
-        // "error" message; this outer guard only fires if the worker goes
-        // completely silent (crash / network drop with no response at all).
+        // 2-minute silent-crash guard. The worker now posts download progress messages
+        // every few KB during model download, so this timer resets constantly during
+        // a legitimate download. It only fires if the worker goes fully silent
+        // (e.g. unhandled exception with no postMessage, or network dropped entirely).
         loadingTimeoutId = setTimeout(() => {
             if (lastProgress < 100 && !fallbackMode) {
                 if (ttsWorker) ttsWorker.terminate();
                 ttsWorker = null;
-                showError("No response from voice engine (4 min). Check your connection and click Retry.");
+                showError("Voice engine stopped responding. Check your connection and click Retry.");
             }
-        }, 240000); // 4 minutes — longer than the worker's own 3-minute first-sentence timeout
+        }, 120000); // 2 minutes
     }
 
     btnRetry?.addEventListener("click", () => {

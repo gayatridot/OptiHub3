@@ -7,7 +7,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OptiHub3 - Text to Speech</title>
 
-  <!-- Local Dev COOP/COEP Helper for SharedArrayBuffer -->
+  <!--
+    Import map — resolves bare specifiers used inside @diffusionstudio/vits-web.
+    The library calls import("onnxruntime-web") with a bare specifier; without this
+    map the import throws in a plain browser module worker (no bundler present).
+    Workers inherit the page's import map in Chrome 89+, Firefox 102+, Safari 16.4+.
+  -->
+  <script type="importmap">
+  {
+    "imports": {
+      "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/esm/ort.min.js"
+    }
+  }
+  </script>
 
   <!-- FFmpeg.wasm ESM Loader -->
   <script type="module">
