@@ -86,14 +86,17 @@ export function initTTSPage() {
 
     function startProgressTimeout() {
         clearTimeout(loadingTimeoutId);
-        // 90s: VITS ONNX model is 60-80 MB — 15s was too short for first-load CDN downloads
+        // Must be > FIRST_SENTENCE_TIMEOUT_MS (180s) in tts-worker.js.
+        // The worker's own per-sentence timeout fires first and posts a clean
+        // "error" message; this outer guard only fires if the worker goes
+        // completely silent (crash / network drop with no response at all).
         loadingTimeoutId = setTimeout(() => {
             if (lastProgress < 100 && !fallbackMode) {
                 if (ttsWorker) ttsWorker.terminate();
                 ttsWorker = null;
-                showError("Progress stalled (90s). Check your network connection.");
+                showError("No response from voice engine (4 min). Check your connection and click Retry.");
             }
-        }, 90000);
+        }, 240000); // 4 minutes — longer than the worker's own 3-minute first-sentence timeout
     }
 
     btnRetry?.addEventListener("click", () => {
