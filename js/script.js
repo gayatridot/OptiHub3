@@ -1,9 +1,16 @@
-import './shared.js';
+import { initSidebarNavigation } from './shared.js';
 import { initTTSPage } from './tts.js';
 import { initCompressorPage } from './compressor.js';
 import { initAudioVideoPage } from './merge.js';
 
+// Attach functions to the global window object to prevent ReferenceError
+window.initSidebarNavigation = initSidebarNavigation;
+window.initTTSPage = initTTSPage;
+window.initCompressorPage = initCompressorPage;
+window.initAudioVideoPage = initAudioVideoPage;
+
 export function initIndexPage() {
+    window.initIndexPage = initIndexPage;
     document.querySelectorAll(".btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
             const text = btn.textContent.toLowerCase();
