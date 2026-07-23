@@ -938,3 +938,47 @@ body {
         height: 150px;
     }
 }
+
+/* TTS Error & Status Styles */
+.tts-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 16px;
+    margin-bottom: 24px;
+}
+
+.tts-status-banner {
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    margin-bottom: 24px;
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tts-status-banner.error {
+    background-color: #FEF2F2;
+    color: #991B1B;
+    border: 1px solid #F87171;
+}
+
+.tts-status-banner.info {
+    background-color: #EFF6FF;
+    color: #1E40AF;
+    border: 1px solid #93C5FD;
+}
+
+.btn-fallback {
+    background-color: #F3F4F6;
+    color: #374151;
+    border-color: #D1D5DB;
+}
+
+.btn-fallback:hover {
+    background-color: #E5E7EB;
+    color: #1F2937;
+    border-color: #9CA3AF;
+}

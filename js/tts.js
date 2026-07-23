@@ -11,10 +11,73 @@ export function initTTSPage() {
     const durationEl = timeSpans[1];
     const previewOverlayText = document.querySelector(".preview-overlay p");
 
+    const btnRetry = document.getElementById("btn-retry");
+    const btnFallback = document.getElementById("btn-fallback");
+    const statusBanner = document.getElementById("tts-status-banner");
+
     let chunkBuffers = []; 
     let combinedWavBlob = null; 
     let audioEngine = new Audio();
     let generatedText = "";
+    
+    let fallbackMode = false;
+    let loadingTimeoutId = null;
+    let lastProgress = 0;
+
+    function showError(msg) {
+        if (statusBanner) {
+            statusBanner.className = "tts-status-banner error";
+            statusBanner.innerHTML = `<span>⚠️</span> Model Load Failed: ${msg}`;
+            statusBanner.style.display = "flex";
+        }
+        if (generateBtn) generateBtn.style.display = "none";
+        if (btnRetry) btnRetry.style.display = "inline-flex";
+        if (btnFallback) btnFallback.style.display = "inline-flex";
+        clearTimeout(loadingTimeoutId);
+    }
+
+    function resetUI() {
+        if (statusBanner) statusBanner.style.display = "none";
+        if (generateBtn) {
+            generateBtn.style.display = "inline-flex";
+            generateBtn.disabled = false;
+            generateBtn.textContent = "Generate Audio";
+        }
+        if (btnRetry) btnRetry.style.display = "none";
+        if (btnFallback) btnFallback.style.display = "none";
+        fallbackMode = false;
+        clearTimeout(loadingTimeoutId);
+    }
+
+    function startProgressTimeout() {
+        clearTimeout(loadingTimeoutId);
+        loadingTimeoutId = setTimeout(() => {
+            if (lastProgress < 100 && !fallbackMode) {
+                if (ttsWorker) ttsWorker.terminate();
+                fallbackToRootWorker();
+                showError("Progress stalled for 15s. Network may have timed out.");
+            }
+        }, 15000);
+    }
+
+    btnRetry?.addEventListener("click", () => {
+        resetUI();
+        if (ttsWorker) ttsWorker.terminate();
+        ttsWorker = new Worker(workerUrl, { type: 'module' });
+        setupWorkerHandlers();
+        generateBtn.click();
+    });
+
+    btnFallback?.addEventListener("click", () => {
+        fallbackMode = true;
+        resetUI();
+        generateBtn.textContent = "Synthesize (Browser Fallback)";
+        if (statusBanner) {
+            statusBanner.className = "tts-status-banner info";
+            statusBanner.innerHTML = "<span>ℹ️</span> Using Browser Speech Synthesis Fallback.";
+            statusBanner.style.display = "flex";
+        }
+    });
 
     // Dynamic self-healing fallback worker resolution logic
     let workerUrl = new URL("tts-worker.js", document.baseURI).href;
@@ -50,15 +113,20 @@ export function initTTSPage() {
             const errorMsg = event.message || "Failed to download worker script (404 Not Found or CORS restriction)";
             console.error("CRITICAL WORKER LIFECYCLE CRASH:", errorMsg, "at:", workerUrl);
             
-            generateBtn.disabled = false;
-            generateBtn.textContent = "Generate Audio";
-            alert(`Worker Error: ${errorMsg}\nPath: ${workerUrl}`);
+            showError(errorMsg);
         };
 
         ttsWorker.onmessage = async (e) => {
-            const { status, buffer, progress, error } = e.data;
+            const { status, buffer, progress, error, message } = e.data;
 
-            if (status === "chunk") {
+            if (status === "loading" || status === "chunk") {
+                lastProgress = progress || 0;
+                startProgressTimeout();
+            }
+
+            if (status === "loading") {
+                generateBtn.textContent = `${message || "Loading..."} ${progress}%`;
+            } else if (status === "chunk") {
                 chunkBuffers.push(buffer);
                 generateBtn.textContent = `Generating... ${progress}%`;
                 
@@ -86,11 +154,10 @@ export function initTTSPage() {
                 audioEngine.load();
                 audioEngine.currentTime = currentPosition;
                 if (wasPlaying) audioEngine.play();
+                clearTimeout(loadingTimeoutId);
             } else if (status === "error") {
                 console.error("MODEL ERROR SENT FROM WORKER:", error);
-                generateBtn.disabled = false;
-                generateBtn.textContent = "Generate Audio";
-                alert(`Synthesis Layer Error: ${error}`);
+                showError(error);
             }
         };
     }
@@ -205,6 +272,35 @@ export function initTTSPage() {
         generatedText = text;
         audioEngine.pause();
         playBtn.textContent = "▶";
+
+        if (fallbackMode) {
+            generateBtn.disabled = true;
+            generateBtn.textContent = "Synthesizing...";
+            
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            
+            const isFemale = voiceSelect.value.toLowerCase().includes("female");
+            const voices = window.speechSynthesis.getVoices();
+            if (voices.length > 0) {
+                const preferredVoice = voices.find(v => v.lang.includes("en-US") && (isFemale ? (v.name.toLowerCase().includes("female") || v.name.toLowerCase().includes("zira")) : (v.name.toLowerCase().includes("male") || v.name.toLowerCase().includes("david"))));
+                if (preferredVoice) utterance.voice = preferredVoice;
+            }
+
+            utterance.onstart = () => {
+                previewOverlayText.textContent = subtitleToggle?.checked ? generatedText : "Voiceover playing via browser...";
+                durationEl.textContent = "--:--";
+            };
+            
+            utterance.onend = () => {
+                generateBtn.disabled = false;
+                generateBtn.textContent = "Synthesize (Browser Fallback)";
+            };
+            
+            window.speechSynthesis.speak(utterance);
+            return;
+        }
+
         chunkBuffers = [];
         combinedWavBlob = null;
 
@@ -215,6 +311,9 @@ export function initTTSPage() {
 
         generateBtn.disabled = true;
         generateBtn.textContent = "Initializing Model... 0%";
+        lastProgress = 0;
+        startProgressTimeout();
+
         downloadBtn.disabled = true;
 
         if (ttsWorker) {

@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OptiHub3 - Text to Speech</title>
   <link rel="stylesheet" href="./style.css">
-  <script src="./js/bundle.js" type="module"></script>
+  <script src="./js/script.js" type="module"></script>
   <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.0/lame.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
@@ -46,7 +46,20 @@
           </div>
         </section>
 
-        <button class="btn btn-primary btn-generate">Generate Audio</button>
+        <div class="tts-actions">
+          <button class="btn btn-primary btn-generate">Generate Audio</button>
+          <button id="btn-retry" class="btn btn-secondary btn-retry" style="display: none;">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 4v6h-6M1 20v-6h6"></path>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            Retry Loading
+          </button>
+          <button id="btn-fallback" class="btn btn-secondary btn-fallback" style="display: none;">
+            Use Browser Voice (Fallback)
+          </button>
+        </div>
+        <div id="tts-status-banner" class="tts-status-banner" style="display: none;"></div>
 
         <section>
           <h3 class="section-heading">Preview</h3>
